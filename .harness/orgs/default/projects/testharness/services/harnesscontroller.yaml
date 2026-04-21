@@ -3,3 +3,22 @@ service:
   identifier: harnesscontroller
   orgIdentifier: default
   projectIdentifier: testharness
+  serviceDefinition:
+    spec:
+      manifests:
+        - manifest:
+            identifier: harnesscontroller
+            type: K8sManifest
+            spec:
+              store:
+                type: Github
+                spec:
+                  connectorRef: harness_gitconnector
+                  gitFetchType: Branch
+                  paths:
+                    - k8s/controller-deployment.yaml
+                    - k8s/rbac.yaml
+                  branch: main
+              skipResourceVersioning: false
+              enableDeclarativeRollback: false
+    type: Kubernetes
