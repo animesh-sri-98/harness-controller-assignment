@@ -1,0 +1,5 @@
+service:
+  name: harness-controller
+  identifier: harnesscontroller
+  orgIdentifier: default
+  projectIdentifier: testharness
