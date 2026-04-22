@@ -1,0 +1,172 @@
+pipeline:
+  name: harness-controller-pipeline
+  identifier: harnesscontrollerpipeline
+  projectIdentifier: testharness
+  orgIdentifier: default
+  tags: {}
+  stages:
+    - stage:
+        name: build-push-scan
+        identifier: buildcontroller
+        description: ""
+        type: CI
+        spec:
+          cloneCodebase: true
+          caching:
+            enabled: true
+            override: true
+            paths: []
+          buildIntelligence:
+            enabled: true
+          infrastructure:
+            type: KubernetesDirect
+            spec:
+              connectorRef: harness_k8sconnector
+              namespace: dev-ns
+              automountServiceAccountToken: true
+              nodeSelector: {}
+              containerSecurityContext:
+                runAsNonRoot: false
+              os: Linux
+          execution:
+            steps:
+              - step:
+                  type: GitClone
+                  name: GitClone_1
+                  identifier: GitClone_1
+                  spec:
+                    connectorRef: harness_gitconnector
+                    build:
+                      type: branch
+                      spec:
+                        branch: main
+                  failureStrategies:
+                    - onFailure:
+                        errors:
+                          - Timeout
+                          - Unknown
+                        action:
+                          type: MarkAsFailure
+              - step:
+                  type: BuildAndPushDockerRegistry
+                  name: BuildAndPushDockerRegistry_1
+                  identifier: BuildAndPushDockerRegistry_1
+                  spec:
+                    connectorRef: animeshsri98
+                    repo: animeshsri98/controller-watcher
+                    tags:
+                      - latest
+              - step:
+                  type: AquaTrivy
+                  name: AquaTrivy_1
+                  identifier: AquaTrivy_1
+                  spec:
+                    mode: orchestration
+                    config: default
+                    target:
+                      type: container
+                      detection: auto
+                    advanced:
+                      log:
+                        level: info
+                      fail_on_severity: critical
+                    privileged: true
+                    image:
+                      type: docker_v2
+                      tag: latest
+                      name: animeshsri98/controller-watcher
+    - stage:
+        name: deploy-to-minikube
+        identifier: deploytominikube
+        description: ""
+        type: Deployment
+        spec:
+          deploymentType: Kubernetes
+          service:
+            serviceRef: harnesscontroller
+          environment:
+            environmentRef: harnessdevenv
+            deployToAll: false
+            infrastructureDefinitions:
+              - identifier: harness_k8sinfra
+            failureStrategies:
+              - onFailure:
+                  errors:
+                    - Timeout
+                    - Connectivity
+                  action:
+                    type: MarkAsFailure
+          execution:
+            steps:
+              - step:
+                  name: Rollout Deployment
+                  identifier: rolloutDeployment
+                  type: K8sRollingDeploy
+                  timeout: 10m
+                  spec:
+                    skipDryRun: false
+                    pruningEnabled: false
+              - step:
+                  type: ShellScript
+                  name: post-deploy-test
+                  identifier: postdeploytest
+                  spec:
+                    shell: Bash
+                    executionTarget: {}
+                    source:
+                      type: Inline
+                      spec:
+                        script: |-
+                          echo "Starting port-forward..."
+
+                          kubectl port-forward svc/controller-service 5000:5000 -n dev-ns > /tmp/port-forward.log 2>&1 &
+
+                          sleep 10
+
+                          for i in {1..5}
+                          do
+                            response=$(curl -s http://localhost:5000/health)
+
+                            echo "Attempt $i Response: $response"
+
+                            if [[ $response == *"healthy"* ]]; then
+                              echo "Health check passed"
+                              exit 0
+                            fi
+
+                            echo "Retrying in 10 seconds..."
+                            sleep 10
+                          done
+
+                          echo "Health check failed"
+                          cat /tmp/port-forward.log
+                          exit 1
+                    environmentVariables: []
+                    outputVariables: []
+                  timeout: 10m
+            rollbackSteps:
+              - step:
+                  name: Rollback Rollout Deployment
+                  identifier: rollbackRolloutDeployment
+                  type: K8sRollingRollback
+                  timeout: 10m
+                  spec:
+                    pruningEnabled: false
+        tags: {}
+        failureStrategies:
+          - onFailure:
+              errors:
+                - AllErrors
+              action:
+                type: StageRollback
+  properties:
+    ci:
+      codebase:
+        connectorRef: harness_gitconnector
+        build: <+input>
+  variables:
+    - name: k8s_namespace
+      type: String
+      description: ""
+      required: true
+      value: <+input>
