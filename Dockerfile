@@ -10,4 +10,6 @@ COPY . .
 
 ENV PYTHONUNBUFFERED=1
 
+EXPOSE 5000
+
 CMD ["python", "CustomController.py"]
