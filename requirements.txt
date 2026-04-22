@@ -1,2 +1,2 @@
-kubernetes
-flask
+kubernetes==29.0.0
+flask==3.0.2
