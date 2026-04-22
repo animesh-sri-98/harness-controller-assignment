@@ -63,6 +63,7 @@ Post Deployment Validation
 2. Build Docker image using Dockerfile
 3. Tag image (`latest`)
 4. Push image to DockerHub
+5. Vulnerability scanning with Aqua Trivy
 
 Docker Image:
 
@@ -71,12 +72,6 @@ animeshsri98/controller-watcher
 ```
 
 ---
-
-## STO Stage
-
-### Tool Used
-
-Harness STO with Aqua Trivy
 
 ### Security Gate
 
