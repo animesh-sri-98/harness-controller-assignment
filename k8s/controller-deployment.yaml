@@ -20,3 +20,5 @@ spec:
       - name: controller
         image: docker.io/animeshsri98/controller-watcher:latest
         imagePullPolicy: Always
+        ports:
+        - containerPort: 5000
