@@ -19,6 +19,7 @@ service:
                     - k8s/controller-deployment.yaml
                     - k8s/rbac.yaml
                     - k8s/controller-service.yaml
+                    - k8s/controller-ingress.yaml
                   branch: main
               skipResourceVersioning: false
               enableDeclarativeRollback: false
