@@ -1,6 +1,6 @@
 ## Overview
 
-This project demonstrates an end-to-end CI/CD pipeline using Harness Free Tier with integrated security testing (STO) and deployment to a local Kubernetes cluster (Minikube).
+This project demonstrates an end-to-end CI/CD pipeline using Harness Free Tier with integrated security testing and deployment to a local Kubernetes cluster (Minikube).
 
 The application is a Python-based Kubernetes controller that watches Deployment resources and automatically creates or deletes corresponding Services. It also exposes a `/health` endpoint for post-deployment validation.
 
@@ -41,8 +41,6 @@ CI Stage
 - Clone Repository
 - Build Docker Image
 - Push Image to DockerHub
-  ↓
-STO Stage
 - Trivy Container Scan
 - Fail Pipeline on CRITICAL Vulnerabilities
   ↓
