@@ -1,4 +1,21 @@
+from flask import Flask, jsonify
 from kubernetes import client, config, watch
+import threading
+
+
+app = Flask(__name__)
+
+
+@app.route("/")
+def home():
+    return "Controller is running"
+
+
+@app.route("/health")
+def health():
+    return jsonify({
+        "status": "healthy"
+    })
 
 
 class WatchDeployments:
@@ -83,4 +100,10 @@ class WatchDeployments:
 
 if __name__ == "__main__":
     watcher = WatchDeployments()
-    watcher.watch_deployments()
+
+    watcher_thread = threading.Thread(
+        target=watcher.watch_deployments
+    )
+    watcher_thread.start()
+
+    app.run(host="0.0.0.0", port=5000)
