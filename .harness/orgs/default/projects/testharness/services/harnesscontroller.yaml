@@ -21,6 +21,8 @@ service:
                     - k8s/controller-service.yaml
                     - k8s/controller-ingress.yaml
                   branch: main
+              valuesPaths:
+                - k8s/values.yaml
               skipResourceVersioning: false
               enableDeclarativeRollback: false
     type: Kubernetes
