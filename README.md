@@ -1,20 +1,20 @@
 ## Overview
-This project features an automated CI/CD pipeline using Harness Free Tier, deploying a Python-based Kubernetes controller to a local Minikube cluster. The pipeline transitions from security-gated builds to multi-environment deployments using immutable versioning and a "Shift Left" security approach.
+This project features an automated CI/CD pipeline using Harness Free Tier, deploying a Python-based Kubernetes controller to a local Minikube cluster. The pipeline implements a "Shift Left" security strategy and ensures environment consistency through immutable versioning.
 
 ---
 
 ## Pipeline Flow
 1. **Build Stage (CI):**
     * **Git Clone:** Pulls source code from GitHub.
-    * **Shift Left Security:** Performs **SAST** (Static Analysis) and **SCA** (Software Composition Analysis) scans in parallel on source code and dependencies before the build.
-    * **Docker Build & Push:** Builds image tagged with unique `<+pipeline.sequenceId>` and pushes to DockerHub.
-    * **Container Scanning:** Aqua Trivy scans the final image.
-    * **Security Gate:** Pipeline fails on any **CRITICAL** vulnerabilities found in any scan phase.
+    * **Shift Left Security:** Performs SAST (Static Analysis) and SCA (Software Composition Analysis) on source code and dependencies *prior* to the build.
+    * **Docker Build & Push:** Builds the image tagged with a unique `<+pipeline.sequenceId>` and pushes to DockerHub.
+    * **Container Scanning:** Aqua Trivy scans the final image for vulnerabilities.
+    * **Security Gate:** Pipeline terminates if any CRITICAL vulnerabilities are detected in any scan phase.
 2. **Deploy Stage (Dev & Prod):**
-    * Deploys to `dev-ns` and `prod-ns` using Go-template manifests (`{{ .Values }}`).
-    * Manages environment-specific settings via Harness **Service Overrides**.
+    * **Manifest-driven Deployment:** Deploys to `dev-ns` and `prod-ns` using Go-template manifests (`{{ .Values }}`).
+    * **Environment Mapping:** Utilizes a `values.yaml` file in GitHub to dynamically map Harness infrastructure variables to Kubernetes resources.
 3. **Validation:**
-    * Automated shell script verifies the `/health` endpoint via the Ingress path.
+    * Automated shell script verifies the `/health` endpoint via the Ingress path to ensure the application is reachable and functional.
 
 ---
 
