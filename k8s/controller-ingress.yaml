@@ -2,7 +2,7 @@ apiVersion: networking.k8s.io/v1
 kind: Ingress
 metadata:
   name: controller-ingress
-  namespace: dev-ns
+  namespace: <+infra.namespace>
 spec:
   rules:
   - host: controller.local
