@@ -2,7 +2,7 @@ apiVersion: v1
 kind: Service
 metadata:
   name: controller-service
-  namespace: <+infra.namespace>
+  namespace: {{ .Values.namespace }}
 spec:
   selector:
     app: custom-controller
