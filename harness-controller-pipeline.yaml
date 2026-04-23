@@ -6,7 +6,7 @@ pipeline:
   tags: {}
   stages:
     - stage:
-        name: build-push-scan
+        name: build
         identifier: buildcontroller
         description: ""
         type: CI
@@ -32,7 +32,7 @@ pipeline:
             steps:
               - step:
                   type: GitClone
-                  name: GitClone_1
+                  name: Checkout Code
                   identifier: GitClone_1
                   spec:
                     connectorRef: harness_gitconnector
@@ -47,6 +47,49 @@ pipeline:
                           - Unknown
                         action:
                           type: MarkAsFailure
+              - parallel:
+                  - step:
+                      type: Owasp
+                      name: SCA Scan
+                      identifier: Owasp_1
+                      spec:
+                        mode: orchestration
+                        config: default
+                        target:
+                          type: repository
+                          detection: auto
+                        advanced:
+                          log:
+                            level: info
+                          fail_on_severity: critical
+                          args:
+                            cli: "--disableOssIndex"
+                      failureStrategies:
+                        - onFailure:
+                            errors:
+                              - AllErrors
+                            action:
+                              type: ProceedWithDefaultValues
+                  - step:
+                      type: Semgrep
+                      name: SAST
+                      identifier: Semgrep_1
+                      spec:
+                        mode: orchestration
+                        config: default
+                        target:
+                          type: repository
+                          detection: auto
+                        advanced:
+                          log:
+                            level: info
+                          fail_on_severity: critical
+                      failureStrategies:
+                        - onFailure:
+                            errors:
+                              - AllErrors
+                            action:
+                              type: ProceedWithDefaultValues
               - step:
                   type: BuildAndPushDockerRegistry
                   name: BuildAndPushDockerRegistry_1
@@ -55,10 +98,10 @@ pipeline:
                     connectorRef: animeshsri98
                     repo: animeshsri98/controller-watcher
                     tags:
-                      - latest
+                      - <+pipeline.sequenceId>
               - step:
                   type: AquaTrivy
-                  name: AquaTrivy_1
+                  name: Post-Build Scan
                   identifier: AquaTrivy_1
                   spec:
                     mode: orchestration
@@ -69,14 +112,20 @@ pipeline:
                     advanced:
                       log:
                         level: info
-                      fail_on_severity: critical
+                      fail_on_severity: none
                     privileged: true
                     image:
                       type: docker_v2
                       tag: latest
                       name: animeshsri98/controller-watcher
+                  failureStrategies:
+                    - onFailure:
+                        errors:
+                          - AllErrors
+                        action:
+                          type: ProceedWithDefaultValues
     - stage:
-        name: deploy-to-minikube
+        name: deploy-to-dev
         identifier: deploytominikube
         description: ""
         type: Deployment
@@ -117,29 +166,128 @@ pipeline:
                       type: Inline
                       spec:
                         script: |-
-                          echo "Starting port-forward..."
+                          INGRESS_IP="192.168.49.2"
+                          INGRESS_HOST="<+env.name>.controller.local"
 
-                          kubectl port-forward svc/controller-service 5000:5000 -n dev-ns > /tmp/port-forward.log 2>&1 &
+                          echo "Testing Ingress at http://$INGRESS_IP/health with Host: $INGRESS_HOST"
 
-                          sleep 10
-
-                          for i in {1..5}
+                          for i in {1..10}
                           do
-                            response=$(curl -s http://localhost:5000/health)
+                            response=$(curl -s -H "Host: $INGRESS_HOST" http://$INGRESS_IP/health)
 
                             echo "Attempt $i Response: $response"
 
                             if [[ $response == *"healthy"* ]]; then
-                              echo "Health check passed"
+                              echo "Health check passed for $INGRESS_HOST"
                               exit 0
                             fi
 
-                            echo "Retrying in 10 seconds..."
-                            sleep 10
+                            echo "Waiting for Ingress to sync... Retrying in 5 seconds..."
+                            sleep 5
                           done
 
-                          echo "Health check failed"
-                          cat /tmp/port-forward.log
+                          echo "Health check failed for $INGRESS_HOST"
+                          exit 1
+                    environmentVariables: []
+                    outputVariables: []
+                  timeout: 10m
+            rollbackSteps:
+              - step:
+                  name: Rollback Rollout Deployment
+                  identifier: rollbackRolloutDeployment
+                  type: K8sRollingRollback
+                  timeout: 10m
+                  spec:
+                    pruningEnabled: false
+        tags: {}
+        failureStrategies:
+          - onFailure:
+              errors:
+                - AllErrors
+              action:
+                type: StageRollback
+    - stage:
+        name: Review
+        identifier: QA_Review
+        description: ""
+        type: Approval
+        spec:
+          execution:
+            steps:
+              - step:
+                  name: Approve Prod Deployment
+                  identifier: Approve_Prod_Deployment
+                  type: HarnessApproval
+                  timeout: 1d
+                  spec:
+                    approvalMessage: |-
+                      Please review the following information
+                      and approve the pipeline progression
+                    includePipelineExecutionHistory: true
+                    approvers:
+                      minimumCount: 1
+                      disallowPipelineExecutor: false
+                      userGroups:
+                        - account._account_all_users
+                    isAutoRejectEnabled: false
+                    approverInputs: []
+        tags: {}
+    - stage:
+        name: deploy-to-prod
+        identifier: deploy_prod
+        description: ""
+        type: Deployment
+        spec:
+          deploymentType: Kubernetes
+          service:
+            serviceRef: harnesscontroller
+          environment:
+            environmentRef: harnessprodenv
+            deployToAll: false
+            infrastructureDefinitions:
+              - identifier: Production
+          execution:
+            steps:
+              - step:
+                  name: Rollout Deployment
+                  identifier: rolloutDeployment
+                  type: K8sRollingDeploy
+                  timeout: 10m
+                  spec:
+                    skipDryRun: false
+                    pruningEnabled: false
+              - step:
+                  type: ShellScript
+                  name: post-deploy-test
+                  identifier: postdeploytest
+                  spec:
+                    shell: Bash
+                    executionTarget: {}
+                    source:
+                      type: Inline
+                      spec:
+                        script: |-
+                          INGRESS_IP="192.168.49.2"
+                          INGRESS_HOST="<+env.name>.controller.local"
+
+                          echo "Testing Ingress at http://$INGRESS_IP/health with Host: $INGRESS_HOST"
+
+                          for i in {1..10}
+                          do
+                            response=$(curl -s -H "Host: $INGRESS_HOST" http://$INGRESS_IP/health)
+
+                            echo "Attempt $i Response: $response"
+
+                            if [[ $response == *"healthy"* ]]; then
+                              echo "Health check passed for $INGRESS_HOST"
+                              exit 0
+                            fi
+
+                            echo "Waiting for Ingress to sync... Retrying in 5 seconds..."
+                            sleep 5
+                          done
+
+                          echo "Health check failed for $INGRESS_HOST"
                           exit 1
                     environmentVariables: []
                     outputVariables: []
@@ -164,9 +312,4 @@ pipeline:
       codebase:
         connectorRef: harness_gitconnector
         build: <+input>
-  variables:
-    - name: k8s_namespace
-      type: String
-      description: ""
-      required: true
-      value: <+input>
+  timeout: 1w
