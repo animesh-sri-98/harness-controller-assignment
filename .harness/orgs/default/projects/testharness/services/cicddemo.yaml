@@ -1,0 +1,5 @@
+service:
+  name: ci-cd-demo
+  identifier: cicddemo
+  orgIdentifier: default
+  projectIdentifier: testharness
